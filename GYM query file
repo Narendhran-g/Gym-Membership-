@@ -1,0 +1,118 @@
+CREATE DATABASE GymDB;
+USE GymDB;
+
+CREATE TABLE Members (
+    MemberID INT PRIMARY KEY AUTO_INCREMENT,
+    Name VARCHAR(100) NOT NULL,
+    Age INT,
+    Gender ENUM('Male', 'Female', 'Other'),
+    Phone VARCHAR(15),
+    Email VARCHAR(100) UNIQUE,
+    JoinDate DATE DEFAULT (CURDATE())
+);
+
+CREATE TABLE MembershipPlans (
+    PlanID INT PRIMARY KEY AUTO_INCREMENT,
+    PlanName VARCHAR(50) NOT NULL,
+    DurationMonths INT,
+    Price DECIMAL(10,2)
+);
+
+CREATE TABLE Subscriptions (
+    SubscriptionID INT PRIMARY KEY AUTO_INCREMENT,
+    MemberID INT,
+    PlanID INT,
+    StartDate DATE DEFAULT (CURDATE()),
+    EndDate DATE,
+    FOREIGN KEY (MemberID) REFERENCES Members(MemberID) ON DELETE CASCADE,
+    FOREIGN KEY (PlanID) REFERENCES MembershipPlans(PlanID) ON DELETE CASCADE
+);
+
+CREATE TABLE Attendance (
+    AttendanceID INT PRIMARY KEY AUTO_INCREMENT,
+    MemberID INT,
+    CheckInTime DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (MemberID) REFERENCES Members(MemberID) ON DELETE CASCADE
+);
+
+INSERT INTO Members (Name, Age, Gender, Phone, Email) 
+VALUES 
+('Narendhran G', 25, 'Male', '1234567890', 'naren@example.com'),
+('johny ram', 24, 'Male', '9876543210', 'johny@example.com'),
+('kumar suresh', 26, 'Male', '9876543210', 'kumarexample.com'),
+('gokul krsih', 27, 'Male', '9876543210', 'gokul@example.com');
+
+INSERT INTO MembershipPlans (PlanName, DurationMonths, Price) 
+VALUES 
+('Monthly Plan', 1, 30.00),
+('Quarterly Plan', 3, 80.00),
+('Annual Plan', 12, 300.00);
+
+INSERT INTO Subscriptions (MemberID, PlanID, StartDate) 
+VALUES (1, 1, CURDATE()), (2, 3, CURDATE());
+
+INSERT INTO Attendance (MemberID) VALUES (1), (2),(3),(4);
+
+
+-- Get Member Subscriptions
+
+delimiter //
+create procedure Member_Subscriptions()
+begin
+SELECT Members.Name, MembershipPlans.PlanName, Subscriptions.StartDate, Subscriptions.EndDate 
+FROM Members
+JOIN Subscriptions ON Members.MemberID = Subscriptions.MemberID
+JOIN MembershipPlans ON Subscriptions.PlanID = MembershipPlans.PlanID;
+end //
+
+delimiter ;
+
+call Member_Subscriptions();
+
+delimiter //
+create procedure Active_Members(in Monday date)
+begin
+SELECT Members.Name, MembershipPlans.PlanName, Subscriptions.EndDate 
+FROM Members
+JOIN Subscriptions ON Members.MemberID = Subscriptions.MemberID
+JOIN MembershipPlans ON Subscriptions.PlanID = MembershipPlans.PlanID
+WHERE Subscriptions.EndDate >= Monday;
+end //
+delimiter ;
+
+set @Monday=CURDATE();
+call Active_Members(@Monday);
+
+-- How can you find the latest check-in time for each member?
+
+SELECT Members.Name, MAX(Attendance.CheckInTime) AS LastCheckIn
+FROM Members
+JOIN Attendance ON Members.MemberID = Attendance.MemberID
+GROUP BY Members.Name;
+
+
+-- How can you find which member has checked in the most times? 
+SELECT Members.Name, COUNT(Attendance.AttendanceID) AS TotalCheckIns
+FROM Members
+JOIN Attendance ON Members.MemberID = Attendance.MemberID
+GROUP BY Members.Name
+ORDER BY TotalCheckIns DESC
+LIMIT 1;
+
+-- How can you find all members who checked in today?
+
+SELECT Members.Name, Attendance.CheckInTime
+FROM Members
+JOIN Attendance ON Members.MemberID = Attendance.MemberID
+WHERE DATE(Attendance.CheckInTime) = CURDATE();
+
+-- How can you extend the subscription of a specific member by one month?
+UPDATE Subscriptions
+SET EndDate = DATE_ADD(EndDate, INTERVAL 1 MONTH)
+WHERE MemberID = (SELECT MemberID FROM Members WHERE Name = 'Narendhran g');
+
+-- Find members who have both a subscription and at least one check-in.
+SELECT DISTINCT Members.Name 
+FROM Members
+JOIN Subscriptions ON Members.MemberID = Subscriptions.MemberID
+JOIN Attendance ON Members.MemberID = Attendance.MemberID;
